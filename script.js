@@ -1,27 +1,36 @@
-async function runTests() {
+async function runTests(){
 
-const results = {}
+const fp = {}
 
-/////////////////////////////
-// 基础浏览器信息
-/////////////////////////////
+////////////////////////////
+// Navigator
+////////////////////////////
 
-results.userAgent = navigator.userAgent
-results.platform = navigator.platform
-results.vendor = navigator.vendor
-results.product = navigator.product
-results.language = navigator.language
-results.languages = navigator.languages
-results.cookieEnabled = navigator.cookieEnabled
-results.hardwareConcurrency = navigator.hardwareConcurrency
-results.deviceMemory = navigator.deviceMemory
-results.maxTouchPoints = navigator.maxTouchPoints
+fp.navigator = {
+userAgent: navigator.userAgent,
+appCodeName: navigator.appCodeName,
+appName: navigator.appName,
+appVersion: navigator.appVersion,
+platform: navigator.platform,
+product: navigator.product,
+productSub: navigator.productSub,
+vendor: navigator.vendor,
+vendorSub: navigator.vendorSub,
+language: navigator.language,
+languages: navigator.languages,
+cookieEnabled: navigator.cookieEnabled,
+hardwareConcurrency: navigator.hardwareConcurrency,
+deviceMemory: navigator.deviceMemory,
+maxTouchPoints: navigator.maxTouchPoints,
+webdriver: navigator.webdriver,
+doNotTrack: navigator.doNotTrack
+}
 
-/////////////////////////////
-// 屏幕信息
-/////////////////////////////
+////////////////////////////
+// Screen
+////////////////////////////
 
-results.screen = {
+fp.screen = {
 width: screen.width,
 height: screen.height,
 availWidth: screen.availWidth,
@@ -31,85 +40,95 @@ pixelDepth: screen.pixelDepth,
 devicePixelRatio: window.devicePixelRatio
 }
 
-/////////////////////////////
-// 时区
-/////////////////////////////
+////////////////////////////
+// Window
+////////////////////////////
 
-results.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-results.timezoneOffset = new Date().getTimezoneOffset()
-
-/////////////////////////////
-// 插件
-/////////////////////////////
-
-results.plugins = []
-for (let i = 0; i < navigator.plugins.length; i++) {
-results.plugins.push(navigator.plugins[i].name)
+fp.window = {
+innerWidth: window.innerWidth,
+innerHeight: window.innerHeight,
+outerWidth: window.outerWidth,
+outerHeight: window.outerHeight
 }
 
-/////////////////////////////
-// mimeTypes
-/////////////////////////////
+////////////////////////////
+// Time
+////////////////////////////
 
-results.mimeTypes = []
-for (let i = 0; i < navigator.mimeTypes.length; i++) {
-results.mimeTypes.push(navigator.mimeTypes[i].type)
+fp.time = {
+timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+timezoneOffset: new Date().getTimezoneOffset(),
+locale: Intl.DateTimeFormat().resolvedOptions().locale
 }
 
-/////////////////////////////
-// webdriver
-/////////////////////////////
+////////////////////////////
+// Plugins
+////////////////////////////
 
-results.webdriver = navigator.webdriver || false
+fp.plugins = []
 
-/////////////////////////////
-// automation hints
-/////////////////////////////
+for(let i=0;i<navigator.plugins.length;i++){
 
-results.automationHints = {
-chromeRuntime: !!window.chrome,
-permissionsAPI: !!navigator.permissions,
-pluginsLength: navigator.plugins.length,
-webdriver: navigator.webdriver
+fp.plugins.push({
+name:navigator.plugins[i].name,
+filename:navigator.plugins[i].filename,
+description:navigator.plugins[i].description
+})
+
 }
 
-/////////////////////////////
-// Canvas fingerprint
-/////////////////////////////
+////////////////////////////
+// MimeTypes
+////////////////////////////
 
-function canvasFingerprint(){
+fp.mimeTypes = []
 
-const canvas = document.createElement("canvas")
-const ctx = canvas.getContext("2d")
+for(let i=0;i<navigator.mimeTypes.length;i++){
 
-ctx.textBaseline = "top"
-ctx.font = "16px Arial"
-ctx.fillText("fingerprint-test",2,2)
+fp.mimeTypes.push({
+type:navigator.mimeTypes[i].type,
+suffixes:navigator.mimeTypes[i].suffixes
+})
+
+}
+
+////////////////////////////
+// Canvas
+////////////////////////////
+
+function canvasFP(){
+
+const canvas=document.createElement("canvas")
+const ctx=canvas.getContext("2d")
+
+ctx.textBaseline="top"
+ctx.font="14px Arial"
+ctx.fillText("fingerprint",2,2)
 
 return canvas.toDataURL()
 
 }
 
-results.canvas = canvasFingerprint()
+fp.canvas=canvasFP()
 
-/////////////////////////////
-// WebGL fingerprint
-/////////////////////////////
+////////////////////////////
+// WebGL
+////////////////////////////
 
-function webglFingerprint(){
+function webglFP(){
 
-const canvas = document.createElement("canvas")
-const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl")
+const canvas=document.createElement("canvas")
+const gl=canvas.getContext("webgl")
 
 if(!gl) return "no-webgl"
 
-const debugInfo = gl.getExtension("WEBGL_debug_renderer_info")
+const dbg=gl.getExtension("WEBGL_debug_renderer_info")
 
-if(debugInfo){
+if(dbg){
 
-return {
-vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
-renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+return{
+vendor:gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL),
+renderer:gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)
 }
 
 }
@@ -118,173 +137,138 @@ return "hidden"
 
 }
 
-results.webgl = webglFingerprint()
+fp.webgl=webglFP()
 
-/////////////////////////////
-// Audio fingerprint
-/////////////////////////////
+////////////////////////////
+// Audio
+////////////////////////////
 
-async function audioFingerprint(){
+async function audioFP(){
 
 try{
 
-const ctx = new OfflineAudioContext(1,44100,44100)
+const ctx=new OfflineAudioContext(1,44100,44100)
 
-const oscillator = ctx.createOscillator()
-oscillator.type = "triangle"
-oscillator.frequency.value = 10000
+const osc=ctx.createOscillator()
+osc.type="triangle"
+osc.frequency.value=10000
 
-const compressor = ctx.createDynamicsCompressor()
+const comp=ctx.createDynamicsCompressor()
 
-oscillator.connect(compressor)
-compressor.connect(ctx.destination)
+osc.connect(comp)
+comp.connect(ctx.destination)
 
-oscillator.start(0)
+osc.start(0)
 
-const buffer = await ctx.startRendering()
+const buf=await ctx.startRendering()
 
-let sum = 0
-
-const data = buffer.getChannelData(0)
+let sum=0
+const data=buf.getChannelData(0)
 
 for(let i=0;i<data.length;i++){
-sum += Math.abs(data[i])
+sum+=Math.abs(data[i])
 }
 
 return sum
 
 }catch(e){
 
-return "audio-error"
+return "error"
 
 }
 
 }
 
-results.audio = await audioFingerprint()
+fp.audio=await audioFP()
 
-/////////////////////////////
-// WebRTC local IP
-/////////////////////////////
-
-async function getWebRTCIP(){
-
-return new Promise(resolve=>{
-
-const pc = new RTCPeerConnection({iceServers:[]})
-
-pc.createDataChannel("")
-
-pc.createOffer().then(offer=>pc.setLocalDescription(offer))
-
-pc.onicecandidate = event=>{
-
-if(!event || !event.candidate) return
-
-const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/
-const ipMatch = ipRegex.exec(event.candidate.candidate)
-
-if(ipMatch){
-
-resolve(ipMatch[1])
-
-pc.close()
-
-}
-
-}
-
-setTimeout(()=>resolve("unknown"),2000)
-
-})
-
-}
-
-results.webrtcIP = await getWebRTCIP()
-
-/////////////////////////////
-// Permissions API
-/////////////////////////////
-
-async function getPermissions(){
-
-const permissionsList = [
-"notifications",
-"geolocation",
-"camera",
-"microphone"
-]
-
-const output = {}
-
-for(const p of permissionsList){
+////////////////////////////
+// Media devices
+////////////////////////////
 
 try{
 
-const status = await navigator.permissions.query({name:p})
+const devices=await navigator.mediaDevices.enumerateDevices()
 
-output[p] = status.state
+fp.mediaDevices=devices.map(d=>({
+kind:d.kind,
+label:d.label
+}))
 
 }catch(e){
 
-output[p] = "unsupported"
+fp.mediaDevices="blocked"
+
+}
+
+////////////////////////////
+// Permissions
+////////////////////////////
+
+const permList=["geolocation","notifications","camera","microphone"]
+
+fp.permissions={}
+
+for(const p of permList){
+
+try{
+
+const r=await navigator.permissions.query({name:p})
+fp.permissions[p]=r.state
+
+}catch(e){
+
+fp.permissions[p]="unsupported"
 
 }
 
 }
 
-return output
+////////////////////////////
+// Bot signals
+////////////////////////////
 
-}
-
-results.permissions = await getPermissions()
-
-/////////////////////////////
-// Bot detection scoring
-/////////////////////////////
-
-let botScore = 0
-const botReasons = []
+let score=0
+let reasons=[]
 
 if(navigator.webdriver){
-botScore += 40
-botReasons.push("webdriver=true")
+score+=40
+reasons.push("webdriver")
 }
 
-if(navigator.plugins.length === 0){
-botScore += 20
-botReasons.push("no plugins")
+if(navigator.plugins.length===0){
+score+=15
+reasons.push("no plugins")
 }
 
 if(!navigator.languages){
-botScore += 10
-botReasons.push("missing languages")
+score+=10
+reasons.push("missing languages")
 }
 
-if(screen.width === 0 || screen.height === 0){
-botScore += 20
-botReasons.push("invalid screen size")
+if(screen.width===0){
+score+=20
+reasons.push("invalid screen")
 }
 
-if(results.webgl === "no-webgl"){
-botScore += 10
-botReasons.push("no webgl")
+if(fp.webgl==="no-webgl"){
+score+=10
+reasons.push("no webgl")
 }
 
-results.botDetection = {
-score: botScore,
-reasons: botReasons,
-riskLevel:
-botScore > 60 ? "high" :
-botScore > 30 ? "medium" :
+fp.botDetection={
+score,
+reasons,
+risk:
+score>60?"high":
+score>30?"medium":
 "low"
 }
 
-/////////////////////////////
-// 输出
-/////////////////////////////
+////////////////////////////
+// OUTPUT
+////////////////////////////
 
-document.getElementById("results").innerText =
-JSON.stringify(results,null,2)
+document.getElementById("results").innerText=
+JSON.stringify(fp,null,2)
 
 }
