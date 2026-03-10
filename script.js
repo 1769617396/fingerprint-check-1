@@ -1,127 +1,16 @@
-function createWebGLContext() {
-    const canvas = document.createElement("canvas");
-    return canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-}
-
-function showBasicInfo(gl) {
-
-    const info = {
-        version: gl.getParameter(gl.VERSION),
-        shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-        vendor: gl.getParameter(gl.VENDOR),
-        renderer: gl.getParameter(gl.RENDERER)
-    };
-
-    let html = "<table>";
-
-    for (let key in info) {
-        html += `<tr><td>${key}</td><td>${info[key]}</td></tr>`;
-    }
-
-    html += "</table>";
-
-    document.getElementById("webgl-basic").innerHTML = html;
-}
-
-function showGPUInfo(gl) {
-
-    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
-
-    if (!debugInfo) {
-        document.getElementById("webgl-gpu").innerText =
-            "WEBGL_debug_renderer_info not available";
-        return;
-    }
-
-    const gpu = {
-        unmaskedVendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
-        unmaskedRenderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
-    };
-
-    let html = "<table>";
-
-    for (let key in gpu) {
-        html += `<tr><td>${key}</td><td>${gpu[key]}</td></tr>`;
-    }
-
-    html += "</table>";
-
-    document.getElementById("webgl-gpu").innerHTML = html;
-}
-
-function showCapabilities(gl) {
-
-    const caps = {
-        MAX_TEXTURE_SIZE: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-        MAX_VERTEX_ATTRIBS: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
-        MAX_RENDERBUFFER_SIZE: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
-        MAX_VIEWPORT_DIMS: gl.getParameter(gl.MAX_VIEWPORT_DIMS).toString()
-    };
-
-    let html = "<table>";
-
-    for (let key in caps) {
-        html += `<tr><td>${key}</td><td>${caps[key]}</td></tr>`;
-    }
-
-    html += "</table>";
-
-    document.getElementById("webgl-cap").innerHTML = html;
-}
-
-function showExtensions(gl) {
-
-    const ext = gl.getSupportedExtensions();
-
-    let html = "<ul>";
-
-    ext.forEach(e => {
-        html += `<li>${e}</li>`;
-    });
-
-    html += "</ul>";
-
-    document.getElementById("webgl-ext").innerHTML = html;
-}
-
-function generateFingerprint(gl) {
+function initWebGL() {
 
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("webgl");
 
-    const data = [
-        ctx.getParameter(ctx.VERSION),
-        ctx.getParameter(ctx.SHADING_LANGUAGE_VERSION),
-        ctx.getParameter(ctx.VENDOR),
-        ctx.getParameter(ctx.RENDERER),
-        ctx.getSupportedExtensions().join(",")
-    ].join("###");
-
-    const hash = simpleHash(data);
-
-    document.getElementById("webgl-fp").innerHTML =
-        `<p>${hash}</p>`;
-}
-
-function simpleHash(str) {
-
-    let hash = 0;
-
-    for (let i = 0; i < str.length; i++) {
-        const chr = str.charCodeAt(i);
-        hash = ((hash << 5) - hash) + chr;
-        hash |= 0;
-    }
-
-    return hash.toString();
-}
-
-window.onload = function () {
-
-    const gl = createWebGLContext();
+    const gl =
+        canvas.getContext("webgl") ||
+        canvas.getContext("experimental-webgl");
 
     if (!gl) {
-        alert("WebGL not supported");
+
+        document.body.innerHTML +=
+            "<p>WebGL not supported</p>";
+
         return;
     }
 
@@ -130,4 +19,99 @@ window.onload = function () {
     showCapabilities(gl);
     showExtensions(gl);
     generateFingerprint(gl);
-};
+}
+
+function showBasicInfo(gl) {
+
+    const info = {
+        version: gl.getParameter(gl.VERSION),
+        shading: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+        vendor: gl.getParameter(gl.VENDOR),
+        renderer: gl.getParameter(gl.RENDERER)
+    };
+
+    renderTable("webgl-basic", info);
+}
+
+function showGPUInfo(gl) {
+
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+
+    if (!ext) {
+
+        document.getElementById("webgl-gpu").innerText =
+            "WEBGL_debug_renderer_info not available";
+
+        return;
+    }
+
+    const gpu = {
+        vendor: gl.getParameter(ext.UNMASKED_VENDOR_WEBGL),
+        renderer: gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+    };
+
+    renderTable("webgl-gpu", gpu);
+}
+
+function showCapabilities(gl) {
+
+    const caps = {
+        MAX_TEXTURE_SIZE: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        MAX_VERTEX_ATTRIBS: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+        MAX_RENDERBUFFER_SIZE: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE)
+    };
+
+    renderTable("webgl-cap", caps);
+}
+
+function showExtensions(gl) {
+
+    const ext = gl.getSupportedExtensions();
+
+    document.getElementById("webgl-ext").innerHTML =
+        "<pre>" + JSON.stringify(ext, null, 2) + "</pre>";
+}
+
+function generateFingerprint(gl) {
+
+    const data = [
+        gl.getParameter(gl.VERSION),
+        gl.getParameter(gl.RENDERER),
+        gl.getParameter(gl.VENDOR)
+    ].join("###");
+
+    const hash = simpleHash(data);
+
+    document.getElementById("webgl-fp").innerText = hash;
+}
+
+function renderTable(id, obj) {
+
+    let html = "<table>";
+
+    for (let key in obj) {
+
+        html +=
+            "<tr><td>" + key + "</td><td>" + obj[key] + "</td></tr>";
+    }
+
+    html += "</table>";
+
+    document.getElementById(id).innerHTML = html;
+}
+
+function simpleHash(str) {
+
+    let hash = 0;
+
+    for (let i = 0; i < str.length; i++) {
+
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+
+        hash |= 0;
+    }
+
+    return hash;
+}
+
+window.onload = initWebGL;
