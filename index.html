@@ -2,295 +2,232 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGL Canvas Full Debug</title>
+<title>Fingerprint Risk Debug</title>
 
 <style>
 body{
-background:#0b0b0b;
+background:#0a0a0a;
 color:#00ff9c;
 font-family:monospace;
 padding:20px;
-line-height:1.4;
 }
-h2{
+
+h1{
 color:#00e1ff;
 }
+
+.pass{
+color:#00ff00;
+font-size:28px;
+}
+
+.fail{
+color:#ff3b3b;
+font-size:28px;
+}
+
 pre{
-white-space:pre-wrap;
-word-break:break-all;
 background:#111;
 padding:15px;
 border-radius:8px;
+white-space:pre-wrap;
 }
 </style>
-
 </head>
 
 <body>
 
-<h2>Canvas / WebGL Fingerprint Full Debug</h2>
+<h1>Browser Fingerprint Debug</h1>
 
-<pre id="out"></pre>
+<div id="status"></div>
+
+<pre id="output"></pre>
 
 <script>
 
-function log(data){
+let result={}
+let warnings=[]
 
-let text=typeof data==="string"?data:JSON.stringify(data,null,2)
+function log(title,data){
 
-console.log(text)
+result[title]=data
 
-document.getElementById("out").textContent+=text+"\n\n"
+document.getElementById("output").textContent+=
+"===== "+title+" =====\n"+
+JSON.stringify(data,null,2)+"\n\n"
+
+console.log(title,data)
 
 }
 
+function hash(str){
 
-
-function hashString(str){
-
-let hash=0
-
+let h=0
 for(let i=0;i<str.length;i++){
+h=((h<<5)-h)+str.charCodeAt(i)
+h|=0
+}
 
-hash=((hash<<5)-hash)+str.charCodeAt(i)
-
-hash|=0
+return h
 
 }
 
-return hash
+/***********************
+Browser
+***********************/
 
+log("browser",{
+
+userAgent:navigator.userAgent,
+platform:navigator.platform,
+languages:navigator.languages,
+hardwareConcurrency:navigator.hardwareConcurrency,
+deviceMemory:navigator.deviceMemory,
+devicePixelRatio:window.devicePixelRatio,
+
+screen:{
+width:screen.width,
+height:screen.height,
+colorDepth:screen.colorDepth
 }
+
+})
 
 
 
 /***********************
- Canvas Fingerprint
+Canvas
 ***********************/
 
-function getCanvasInfo(){
+function canvasFP(){
 
 const canvas=document.createElement("canvas")
 
-canvas.width=300
-canvas.height=150
+canvas.width=400
+canvas.height=200
 
 const ctx=canvas.getContext("2d")
 
 ctx.textBaseline="top"
 ctx.font="16px Arial"
+
 ctx.fillStyle="#f60"
-ctx.fillRect(125,1,62,20)
+ctx.fillRect(50,20,100,50)
 
 ctx.fillStyle="#069"
-ctx.fillText("Canvas Fingerprint Test",2,15)
-
-ctx.fillStyle="rgba(102,204,0,0.7)"
-ctx.fillText("Canvas Fingerprint Test",4,17)
+ctx.fillText("Canvas Fingerprint",2,30)
 
 ctx.strokeStyle="#ff00ff"
-ctx.arc(50,50,40,0,Math.PI*2,true)
+ctx.arc(120,100,60,0,Math.PI*2)
 ctx.stroke()
 
 const dataURL=canvas.toDataURL()
 
-const imgData=ctx.getImageData(0,0,canvas.width,canvas.height).data
-
-let pixelSample=[]
-
-for(let i=0;i<100;i++){
-
-pixelSample.push(imgData[i])
-
-}
-
 return{
 
-width:canvas.width,
-height:canvas.height,
-
-dataURL_length:dataURL.length,
-dataURL_hash:hashString(dataURL),
-
-pixel_sample:pixelSample
+hash:hash(dataURL),
+length:dataURL.length
 
 }
 
 }
+
+const canvasInfo=canvasFP()
+
+log("canvas",canvasInfo)
 
 
 
 /***********************
- WebGL Parameter Dump
+WebGL
 ***********************/
 
-function getGLParameters(gl){
-
-let params={}
-
-const names=Object.getOwnPropertyNames(gl.__proto__)
-
-for(let name of names){
-
-if(typeof gl[name]==="number"){
-
-try{
-
-params[name]=gl.getParameter(gl[name])
-
-}catch(e){}
-
-}
-
-}
-
-return params
-
-}
-
-
-
-/***********************
- Shader Precision
-***********************/
-
-function getShaderPrecision(gl){
-
-let result={}
-
-const shaders=[
-
-["VERTEX_SHADER","vertex"],
-["FRAGMENT_SHADER","fragment"]
-
-]
-
-const types=[
-
-["LOW_FLOAT","low_float"],
-["MEDIUM_FLOAT","medium_float"],
-["HIGH_FLOAT","high_float"],
-["LOW_INT","low_int"],
-["MEDIUM_INT","medium_int"],
-["HIGH_INT","high_int"]
-
-]
-
-for(let s of shaders){
-
-let shaderType=gl[s[0]]
-
-result[s[1]]={}
-
-for(let t of types){
-
-let p=gl.getShaderPrecisionFormat(shaderType,gl[t[0]])
-
-result[s[1]][t[1]]={
-
-rangeMin:p.rangeMin,
-rangeMax:p.rangeMax,
-precision:p.precision
-
-}
-
-}
-
-}
-
-return result
-
-}
-
-
-
-/***********************
- WebGL Info
-***********************/
-
-function getWebGLInfo(type){
+function detectGL(type){
 
 const canvas=document.createElement("canvas")
 
 const gl=canvas.getContext(type)
 
-if(!gl){
+if(!gl) return {error:type+" unsupported"}
 
-return{error:type+" not supported"}
+const debug=gl.getExtension("WEBGL_debug_renderer_info")
+
+let vendor=null
+let renderer=null
+
+if(debug){
+
+vendor=gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)
+renderer=gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+
+}else{
+
+vendor=gl.getParameter(gl.VENDOR)
+renderer=gl.getParameter(gl.RENDERER)
 
 }
 
-const debugInfo=gl.getExtension("WEBGL_debug_renderer_info")
+let extensions=gl.getSupportedExtensions()
 
-const vendor=debugInfo?gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR)
+let extHash=hash(extensions.join(","))
 
-const renderer=debugInfo?gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)
+let caps={
 
-const extensions=gl.getSupportedExtensions()
+MAX_TEXTURE_SIZE:gl.getParameter(gl.MAX_TEXTURE_SIZE),
+MAX_RENDERBUFFER_SIZE:gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+MAX_VERTEX_ATTRIBS:gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
+
+}
 
 return{
 
-context_type:type,
-
-vendor:vendor,
-
-renderer:renderer,
+context:type,
+vendor,
+renderer,
 
 version:gl.getParameter(gl.VERSION),
 
-shading_language:gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-
 extensions_count:extensions.length,
+extensions_hash:extHash,
 
-extensions:extensions,
-
-parameters:getGLParameters(gl),
-
-shader_precision:getShaderPrecision(gl)
+capability:caps
 
 }
 
 }
+
+const webgl1=detectGL("webgl")
+const webgl2=detectGL("webgl2")
+
+log("webgl1",webgl1)
+log("webgl2",webgl2)
 
 
 
 /***********************
- Browser Info
+WebGPU
 ***********************/
 
-function getBrowserInfo(){
+async function detectGPU(){
+
+if(!navigator.gpu) return {supported:false}
+
+try{
+
+const adapter=await navigator.gpu.requestAdapter()
+
+if(!adapter) return {adapter:null}
 
 return{
 
-userAgent:navigator.userAgent,
-
-platform:navigator.platform,
-
-language:navigator.language,
-
-languages:navigator.languages,
-
-hardwareConcurrency:navigator.hardwareConcurrency,
-
-deviceMemory:navigator.deviceMemory,
-
-devicePixelRatio:window.devicePixelRatio,
-
-screen:{
-
-width:screen.width,
-
-height:screen.height,
-
-availWidth:screen.availWidth,
-
-availHeight:screen.availHeight,
-
-colorDepth:screen.colorDepth,
-
-pixelDepth:screen.pixelDepth
+name:adapter.name,
+limits:adapter.limits
 
 }
+
+}catch(e){
+
+return {error:e.toString()}
 
 }
 
@@ -299,27 +236,133 @@ pixelDepth:screen.pixelDepth
 
 
 /***********************
- Run
+Audio
 ***********************/
 
-log("===== Browser Info =====")
+async function audioFP(){
 
-log(getBrowserInfo())
+try{
 
-log("===== Canvas Info =====")
+let ctx=new OfflineAudioContext(1,44100,44100)
 
-log(getCanvasInfo())
+let osc=ctx.createOscillator()
+osc.type="triangle"
 
-log("===== WebGL1 Info =====")
+let comp=ctx.createDynamicsCompressor()
 
-log(getWebGLInfo("webgl"))
+osc.connect(comp)
+comp.connect(ctx.destination)
 
-log("===== WebGL2 Info =====")
+osc.start()
 
-log(getWebGLInfo("webgl2"))
+let buffer=await ctx.startRendering()
+
+let data=buffer.getChannelData(0)
+
+let sum=0
+
+for(let i=0;i<data.length;i++){
+
+sum+=Math.abs(data[i])
+
+}
+
+return{
+
+value:sum,
+hash:hash(sum.toString())
+
+}
+
+}catch(e){
+
+return {error:e.toString()}
+
+}
+
+}
+
+
+
+/***********************
+Risk Detection
+***********************/
+
+function runChecks(){
+
+if(webgl1.renderer!==webgl2.renderer){
+
+warnings.push("WebGL1/WebGL2 renderer mismatch")
+
+}
+
+if(webgl1.extensions_count<5){
+
+warnings.push("WebGL extensions unusually low")
+
+}
+
+if(webgl1.capability.MAX_TEXTURE_SIZE<4096){
+
+warnings.push("GPU capability abnormal")
+
+}
+
+if(!webgl1.renderer){
+
+warnings.push("Renderer missing")
+
+}
+
+if(canvasInfo.length<1000){
+
+warnings.push("Canvas fingerprint abnormal")
+
+}
+
+}
+
+
+
+/***********************
+Run
+***********************/
+
+async function run(){
+
+const gpu=await detectGPU()
+
+log("webgpu",gpu)
+
+const audio=await audioFP()
+
+log("audio",audio)
+
+runChecks()
+
+let pass=warnings.length===0
+
+const status=document.getElementById("status")
+
+if(pass){
+
+status.innerHTML="<div class='pass'>PASS ✓ No obvious fingerprint anomaly detected</div>"
+
+}else{
+
+status.innerHTML="<div class='fail'>FAIL ⚠ Fingerprint anomalies detected</div>"
+
+document.getElementById("output").textContent+=
+"===== WARNINGS =====\n"+
+warnings.join("\n")
+
+}
+
+}
+
+run()
 
 </script>
 
 </body>
-
 </html>
