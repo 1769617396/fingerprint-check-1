@@ -1,34 +1,325 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WebGL + Canvas Fingerprint Demo</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<title>WebGL Canvas Full Debug</title>
+
+<style>
+body{
+background:#0b0b0b;
+color:#00ff9c;
+font-family:monospace;
+padding:20px;
+line-height:1.4;
+}
+h2{
+color:#00e1ff;
+}
+pre{
+white-space:pre-wrap;
+word-break:break-all;
+background:#111;
+padding:15px;
+border-radius:8px;
+}
+</style>
+
 </head>
 
 <body>
 
-<h1>WebGL + Canvas Fingerprint Demo</h1>
+<h2>Canvas / WebGL Fingerprint Full Debug</h2>
 
-<h2>Basic WebGL Info</h2>
-<div id="webgl-basic"></div>
+<pre id="out"></pre>
 
-<h2>GPU Info</h2>
-<div id="webgl-gpu"></div>
+<script>
 
-<h2>WebGL Capabilities</h2>
-<div id="webgl-cap"></div>
+function log(data){
 
-<h2>Supported WebGL Extensions</h2>
-<div id="webgl-ext"></div>
+let text=typeof data==="string"?data:JSON.stringify(data,null,2)
 
-<h2>WebGL Fingerprint</h2>
-<div id="webgl-fp"></div>
+console.log(text)
 
-<h2>Canvas Fingerprint</h2>
-<div id="canvas-fp"></div>
+document.getElementById("out").textContent+=text+"\n\n"
 
-<script src="script.js"></script>
+}
+
+
+
+function hashString(str){
+
+let hash=0
+
+for(let i=0;i<str.length;i++){
+
+hash=((hash<<5)-hash)+str.charCodeAt(i)
+
+hash|=0
+
+}
+
+return hash
+
+}
+
+
+
+/***********************
+ Canvas Fingerprint
+***********************/
+
+function getCanvasInfo(){
+
+const canvas=document.createElement("canvas")
+
+canvas.width=300
+canvas.height=150
+
+const ctx=canvas.getContext("2d")
+
+ctx.textBaseline="top"
+ctx.font="16px Arial"
+ctx.fillStyle="#f60"
+ctx.fillRect(125,1,62,20)
+
+ctx.fillStyle="#069"
+ctx.fillText("Canvas Fingerprint Test",2,15)
+
+ctx.fillStyle="rgba(102,204,0,0.7)"
+ctx.fillText("Canvas Fingerprint Test",4,17)
+
+ctx.strokeStyle="#ff00ff"
+ctx.arc(50,50,40,0,Math.PI*2,true)
+ctx.stroke()
+
+const dataURL=canvas.toDataURL()
+
+const imgData=ctx.getImageData(0,0,canvas.width,canvas.height).data
+
+let pixelSample=[]
+
+for(let i=0;i<100;i++){
+
+pixelSample.push(imgData[i])
+
+}
+
+return{
+
+width:canvas.width,
+height:canvas.height,
+
+dataURL_length:dataURL.length,
+dataURL_hash:hashString(dataURL),
+
+pixel_sample:pixelSample
+
+}
+
+}
+
+
+
+/***********************
+ WebGL Parameter Dump
+***********************/
+
+function getGLParameters(gl){
+
+let params={}
+
+const names=Object.getOwnPropertyNames(gl.__proto__)
+
+for(let name of names){
+
+if(typeof gl[name]==="number"){
+
+try{
+
+params[name]=gl.getParameter(gl[name])
+
+}catch(e){}
+
+}
+
+}
+
+return params
+
+}
+
+
+
+/***********************
+ Shader Precision
+***********************/
+
+function getShaderPrecision(gl){
+
+let result={}
+
+const shaders=[
+
+["VERTEX_SHADER","vertex"],
+["FRAGMENT_SHADER","fragment"]
+
+]
+
+const types=[
+
+["LOW_FLOAT","low_float"],
+["MEDIUM_FLOAT","medium_float"],
+["HIGH_FLOAT","high_float"],
+["LOW_INT","low_int"],
+["MEDIUM_INT","medium_int"],
+["HIGH_INT","high_int"]
+
+]
+
+for(let s of shaders){
+
+let shaderType=gl[s[0]]
+
+result[s[1]]={}
+
+for(let t of types){
+
+let p=gl.getShaderPrecisionFormat(shaderType,gl[t[0]])
+
+result[s[1]][t[1]]={
+
+rangeMin:p.rangeMin,
+rangeMax:p.rangeMax,
+precision:p.precision
+
+}
+
+}
+
+}
+
+return result
+
+}
+
+
+
+/***********************
+ WebGL Info
+***********************/
+
+function getWebGLInfo(type){
+
+const canvas=document.createElement("canvas")
+
+const gl=canvas.getContext(type)
+
+if(!gl){
+
+return{error:type+" not supported"}
+
+}
+
+const debugInfo=gl.getExtension("WEBGL_debug_renderer_info")
+
+const vendor=debugInfo?gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL):gl.getParameter(gl.VENDOR)
+
+const renderer=debugInfo?gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)
+
+const extensions=gl.getSupportedExtensions()
+
+return{
+
+context_type:type,
+
+vendor:vendor,
+
+renderer:renderer,
+
+version:gl.getParameter(gl.VERSION),
+
+shading_language:gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+
+extensions_count:extensions.length,
+
+extensions:extensions,
+
+parameters:getGLParameters(gl),
+
+shader_precision:getShaderPrecision(gl)
+
+}
+
+}
+
+
+
+/***********************
+ Browser Info
+***********************/
+
+function getBrowserInfo(){
+
+return{
+
+userAgent:navigator.userAgent,
+
+platform:navigator.platform,
+
+language:navigator.language,
+
+languages:navigator.languages,
+
+hardwareConcurrency:navigator.hardwareConcurrency,
+
+deviceMemory:navigator.deviceMemory,
+
+devicePixelRatio:window.devicePixelRatio,
+
+screen:{
+
+width:screen.width,
+
+height:screen.height,
+
+availWidth:screen.availWidth,
+
+availHeight:screen.availHeight,
+
+colorDepth:screen.colorDepth,
+
+pixelDepth:screen.pixelDepth
+
+}
+
+}
+
+}
+
+
+
+/***********************
+ Run
+***********************/
+
+log("===== Browser Info =====")
+
+log(getBrowserInfo())
+
+log("===== Canvas Info =====")
+
+log(getCanvasInfo())
+
+log("===== WebGL1 Info =====")
+
+log(getWebGLInfo("webgl"))
+
+log("===== WebGL2 Info =====")
+
+log(getWebGLInfo("webgl2"))
+
+</script>
+
 </body>
+
 </html>
