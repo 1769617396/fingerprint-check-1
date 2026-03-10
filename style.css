@@ -16,8 +16,7 @@ td {
     padding: 8px;
 }
 
-pre {
-    background: #f0f0f0;
+ul, pre {
+    background: white;
     padding: 10px;
-    overflow-x: auto;
 }
