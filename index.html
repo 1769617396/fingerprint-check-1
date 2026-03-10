@@ -2,365 +2,319 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Fingerprint Risk Debug</title>
+<title>GPU Fingerprint Debug</title>
 
 <style>
 body{
-background:#0a0a0a;
-color:#00ff9c;
-font-family:monospace;
-padding:20px;
+    font-family: monospace;
+    background:#111;
+    color:#eee;
+    padding:20px;
 }
-
-h1{
-color:#00e1ff;
-}
-
-.pass{
-color:#00ff00;
-font-size:28px;
-}
-
-.fail{
-color:#ff3b3b;
-font-size:28px;
-}
-
-pre{
-background:#111;
-padding:15px;
-border-radius:8px;
-white-space:pre-wrap;
+.pass{color:#00ff88}
+.fail{color:#ff4d4d}
+.warn{color:#ffaa00}
+.section{
+    margin-top:30px;
+    padding:10px;
+    border:1px solid #444;
 }
 </style>
+
 </head>
 
 <body>
 
-<h1>Browser Fingerprint Debug</h1>
+<h1>WebGL / Canvas / WebGPU Fingerprint Debug</h1>
 
-<div id="status"></div>
-
-<pre id="output"></pre>
+<div id="summary"></div>
+<div id="output"></div>
 
 <script>
 
-let result={}
-let warnings=[]
+function print(title,data){
 
-function log(title,data){
+    const div=document.createElement("div")
+    div.className="section"
 
-result[title]=data
+    const h=document.createElement("h3")
+    h.textContent=title
 
-document.getElementById("output").textContent+=
-"===== "+title+" =====\n"+
-JSON.stringify(data,null,2)+"\n\n"
+    const pre=document.createElement("pre")
+    pre.textContent=JSON.stringify(data,null,2)
 
-console.log(title,data)
+    div.appendChild(h)
+    div.appendChild(pre)
 
+    document.getElementById("output").appendChild(div)
 }
 
-function hash(str){
+function check(name,cond){
 
-let h=0
-for(let i=0;i<str.length;i++){
-h=((h<<5)-h)+str.charCodeAt(i)
-h|=0
+    const line=document.createElement("div")
+
+    if(cond){
+        line.innerHTML="✔ "+name
+        line.className="pass"
+    }else{
+        line.innerHTML="✖ "+name
+        line.className="fail"
+    }
+
+    document.getElementById("summary").appendChild(line)
 }
 
-return h
-
-}
-
-/***********************
-Browser
-***********************/
-
-log("browser",{
-
-userAgent:navigator.userAgent,
-platform:navigator.platform,
-languages:navigator.languages,
-hardwareConcurrency:navigator.hardwareConcurrency,
-deviceMemory:navigator.deviceMemory,
-devicePixelRatio:window.devicePixelRatio,
-
-screen:{
-width:screen.width,
-height:screen.height,
-colorDepth:screen.colorDepth
-}
-
-})
-
-
-
-/***********************
-Canvas
-***********************/
-
-function canvasFP(){
 
 const canvas=document.createElement("canvas")
+const gl=canvas.getContext("webgl")
+const gl2=canvas.getContext("webgl2")
 
-canvas.width=400
-canvas.height=200
-
-const ctx=canvas.getContext("2d")
-
-ctx.textBaseline="top"
-ctx.font="16px Arial"
-
-ctx.fillStyle="#f60"
-ctx.fillRect(50,20,100,50)
-
-ctx.fillStyle="#069"
-ctx.fillText("Canvas Fingerprint",2,30)
-
-ctx.strokeStyle="#ff00ff"
-ctx.arc(120,100,60,0,Math.PI*2)
-ctx.stroke()
-
-const dataURL=canvas.toDataURL()
-
-return{
-
-hash:hash(dataURL),
-length:dataURL.length
-
+if(!gl){
+    alert("WebGL not supported")
 }
-
-}
-
-const canvasInfo=canvasFP()
-
-log("canvas",canvasInfo)
-
-
-
-/***********************
-WebGL
-***********************/
-
-function detectGL(type){
-
-const canvas=document.createElement("canvas")
-
-const gl=canvas.getContext(type)
-
-if(!gl) return {error:type+" unsupported"}
 
 const debug=gl.getExtension("WEBGL_debug_renderer_info")
 
-let vendor=null
-let renderer=null
+const vendor=debug?gl.getParameter(debug.UNMASKED_VENDOR_WEBGL):"unknown"
+const renderer=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):"unknown"
 
-if(debug){
+check("WEBGL_debug_renderer_info available",!!debug)
 
-vendor=gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)
-renderer=gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)
+check("Renderer exists",renderer!="unknown")
 
-}else{
+check("Vendor exists",vendor!="unknown")
 
-vendor=gl.getParameter(gl.VENDOR)
-renderer=gl.getParameter(gl.RENDERER)
+
+
+/* ======================================
+WEBGL PARAMETERS
+====================================== */
+
+const params={}
+
+const paramList=[
+
+"MAX_TEXTURE_SIZE",
+"MAX_RENDERBUFFER_SIZE",
+"MAX_VERTEX_ATTRIBS",
+"MAX_TEXTURE_IMAGE_UNITS",
+"MAX_VERTEX_TEXTURE_IMAGE_UNITS",
+"MAX_COMBINED_TEXTURE_IMAGE_UNITS",
+"MAX_CUBE_MAP_TEXTURE_SIZE",
+"MAX_VIEWPORT_DIMS",
+"ALIASED_LINE_WIDTH_RANGE",
+"ALIASED_POINT_SIZE_RANGE",
+"MAX_VERTEX_UNIFORM_VECTORS",
+"MAX_FRAGMENT_UNIFORM_VECTORS",
+"MAX_VARYING_VECTORS"
+
+]
+
+paramList.forEach(p=>{
+    try{
+        params[p]=gl.getParameter(gl[p])
+    }catch(e){}
+})
+
+print("WebGL Parameters",params)
+
+
+
+/* ======================================
+EXTENSIONS
+====================================== */
+
+const extensions=gl.getSupportedExtensions()||[]
+
+print("WebGL Extensions",extensions)
+
+check("Extensions >= 30",extensions.length>=30)
+
+
+
+/* ======================================
+SHADER PRECISION
+====================================== */
+
+function precision(shader,type){
+
+    const p=gl.getShaderPrecisionFormat(shader,type)
+
+    return{
+
+        rangeMin:p.rangeMin,
+        rangeMax:p.rangeMax,
+        precision:p.precision
+    }
+}
+
+const shaderPrecision={
+
+VERTEX_HIGH_FLOAT:precision(gl.VERTEX_SHADER,gl.HIGH_FLOAT),
+VERTEX_MEDIUM_FLOAT:precision(gl.VERTEX_SHADER,gl.MEDIUM_FLOAT),
+VERTEX_LOW_FLOAT:precision(gl.VERTEX_SHADER,gl.LOW_FLOAT),
+
+FRAGMENT_HIGH_FLOAT:precision(gl.FRAGMENT_SHADER,gl.HIGH_FLOAT),
+FRAGMENT_MEDIUM_FLOAT:precision(gl.FRAGMENT_SHADER,gl.MEDIUM_FLOAT),
+FRAGMENT_LOW_FLOAT:precision(gl.FRAGMENT_SHADER,gl.LOW_FLOAT)
 
 }
 
-let extensions=gl.getSupportedExtensions()
+print("Shader Precision",shaderPrecision)
 
-let extHash=hash(extensions.join(","))
 
-let caps={
 
-MAX_TEXTURE_SIZE:gl.getParameter(gl.MAX_TEXTURE_SIZE),
-MAX_RENDERBUFFER_SIZE:gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
-MAX_VERTEX_ATTRIBS:gl.getParameter(gl.MAX_VERTEX_ATTRIBS)
+/* ======================================
+CANVAS FINGERPRINT
+====================================== */
 
+function canvasFingerprint(){
+
+    const c=document.createElement("canvas")
+    const ctx=c.getContext("2d")
+
+    ctx.textBaseline="top"
+    ctx.font="14px Arial"
+    ctx.fillStyle="#f60"
+    ctx.fillRect(125,1,62,20)
+
+    ctx.fillStyle="#069"
+    ctx.fillText("fingerprint",2,15)
+
+    return c.toDataURL()
 }
 
-return{
+const canvasFP=canvasFingerprint()
 
-context:type,
-vendor,
-renderer,
+print("Canvas Fingerprint",canvasFP)
 
-version:gl.getParameter(gl.VERSION),
 
-extensions_count:extensions.length,
-extensions_hash:extHash,
 
-capability:caps
+/* ======================================
+WEBGPU
+====================================== */
+
+async function getWebGPU(){
+
+if(!navigator.gpu){
+
+print("WebGPU","not supported")
+return
 
 }
-
-}
-
-const webgl1=detectGL("webgl")
-const webgl2=detectGL("webgl2")
-
-log("webgl1",webgl1)
-log("webgl2",webgl2)
-
-
-
-/***********************
-WebGPU
-***********************/
-
-async function detectGPU(){
-
-if(!navigator.gpu) return {supported:false}
-
-try{
 
 const adapter=await navigator.gpu.requestAdapter()
 
-if(!adapter) return {adapter:null}
+if(!adapter){
 
-return{
-
-name:adapter.name,
-limits:adapter.limits
+print("WebGPU","adapter not found")
+return
 
 }
 
-}catch(e){
-
-return {error:e.toString()}
-
-}
-
-}
-
-
-
-/***********************
-Audio
-***********************/
-
-async function audioFP(){
+const info={}
 
 try{
 
-let ctx=new OfflineAudioContext(1,44100,44100)
+const adapterInfo=await adapter.requestAdapterInfo()
 
-let osc=ctx.createOscillator()
-osc.type="triangle"
+info.vendor=adapterInfo.vendor
+info.architecture=adapterInfo.architecture
+info.description=adapterInfo.description
+info.device=adapterInfo.device
 
-let comp=ctx.createDynamicsCompressor()
+}catch(e){}
 
-osc.connect(comp)
-comp.connect(ctx.destination)
-
-osc.start()
-
-let buffer=await ctx.startRendering()
-
-let data=buffer.getChannelData(0)
-
-let sum=0
-
-for(let i=0;i<data.length;i++){
-
-sum+=Math.abs(data[i])
+print("WebGPU Adapter",info)
 
 }
 
-return{
-
-value:sum,
-hash:hash(sum.toString())
-
-}
-
-}catch(e){
-
-return {error:e.toString()}
-
-}
-
-}
+getWebGPU()
 
 
 
-/***********************
-Risk Detection
-***********************/
+/* ======================================
+GPU TIMING TEST
+====================================== */
 
-function runChecks(){
+function gpuBenchmark(){
 
-if(webgl1.renderer!==webgl2.renderer){
+const t0=performance.now()
 
-warnings.push("WebGL1/WebGL2 renderer mismatch")
+for(let i=0;i<5000;i++){
+
+gl.clear(gl.COLOR_BUFFER_BIT)
 
 }
 
-if(webgl1.extensions_count<5){
+const t1=performance.now()
 
-warnings.push("WebGL extensions unusually low")
-
-}
-
-if(webgl1.capability.MAX_TEXTURE_SIZE<4096){
-
-warnings.push("GPU capability abnormal")
+return (t1-t0)
 
 }
 
-if(!webgl1.renderer){
+const gpuTime=gpuBenchmark()
 
-warnings.push("Renderer missing")
+print("GPU Timing Benchmark (ms)",gpuTime)
+
+
+
+/* ======================================
+INTEL PROFILE CHECK
+====================================== */
+
+function intelCheck(){
+
+let ok=true
+
+if(!renderer.toLowerCase().includes("intel")) ok=false
+
+if(params.MAX_TEXTURE_SIZE<16384) ok=false
+
+if(extensions.length<40) ok=false
+
+return ok
 
 }
 
-if(canvasInfo.length<1000){
-
-warnings.push("Canvas fingerprint abnormal")
-
-}
-
-}
+check("Intel Profile Consistency",intelCheck())
 
 
 
-/***********************
-Run
-***********************/
+/* ======================================
+FINAL RESULT
+====================================== */
 
-async function run(){
+function finalCheck(){
 
-const gpu=await detectGPU()
+let issues=[]
 
-log("webgpu",gpu)
+if(!debug) issues.push("debug_renderer_info missing")
 
-const audio=await audioFP()
+if(extensions.length<30) issues.push("extensions too few")
 
-log("audio",audio)
+if(!renderer) issues.push("renderer empty")
 
-runChecks()
+if(issues.length===0){
 
-let pass=warnings.length===0
-
-const status=document.getElementById("status")
-
-if(pass){
-
-status.innerHTML="<div class='pass'>PASS ✓ No obvious fingerprint anomaly detected</div>"
+document.getElementById("summary").innerHTML+=
+"<h2 class='pass'>PASS — No obvious spoof detected</h2>"
 
 }else{
 
-status.innerHTML="<div class='fail'>FAIL ⚠ Fingerprint anomalies detected</div>"
-
-document.getElementById("output").textContent+=
-"===== WARNINGS =====\n"+
-warnings.join("\n")
+document.getElementById("summary").innerHTML+=
+"<h2 class='fail'>FAIL — Possible fingerprint spoof</h2>"
 
 }
 
 }
 
-run()
+finalCheck()
+
+
+
+print("Renderer",renderer)
+print("Vendor",vendor)
 
 </script>
 
