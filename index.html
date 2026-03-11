@@ -2,156 +2,59 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>WebGL / WebGPU Info</title>
+<title>Screen Info</title>
 <style>
-body { font-family: monospace; background:#111; color:#0f0; }
-pre { white-space: pre-wrap; }
+body{
+    font-family: monospace;
+    background:#111;
+    color:#0f0;
+}
 </style>
 </head>
 <body>
 
-<h2>WebGL / WebGPU Device Info</h2>
+<h2>Screen Information</h2>
 <pre id="output"></pre>
 
 <script>
 
-function log(text) {
+function log(text){
     console.log(text);
     document.getElementById("output").textContent += text + "\n";
 }
 
-function dumpObject(title, obj) {
-    log("===== " + title + " =====");
-    for (const key in obj) {
-        try {
-            log(key + ": " + obj[key]);
-        } catch(e){}
-    }
-}
+function getScreenInfo(){
 
-function getWebGLInfo(type) {
+    const info = {
+        "screen.width": screen.width,
+        "screen.height": screen.height,
 
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext(type);
+        "screen.availWidth": screen.availWidth,
+        "screen.availHeight": screen.availHeight,
 
-    if (!gl) {
-        log(type + " not supported\n");
-        return;
-    }
+        "screen.colorDepth": screen.colorDepth,
+        "screen.pixelDepth": screen.pixelDepth,
 
-    log("\n========== " + type + " ==========");
+        "window.devicePixelRatio": window.devicePixelRatio,
 
-    const params = Object.getOwnPropertyNames(Object.getPrototypeOf(gl));
+        "window.innerWidth": window.innerWidth,
+        "window.innerHeight": window.innerHeight,
 
-    const paramNames = [];
+        "window.outerWidth": window.outerWidth,
+        "window.outerHeight": window.outerHeight
+    };
 
-    for (let key in gl) {
-        if (typeof gl[key] === "number") {
-            paramNames.push(key);
-        }
-    }
+    log("===== Screen Info =====");
 
-    paramNames.sort();
-
-    for (const name of paramNames) {
-        try {
-            const value = gl.getParameter(gl[name]);
-            log(name + ": " + JSON.stringify(value));
-        } catch(e){}
-    }
-
-    log("\n---- Shader Precision ----");
-
-    const shaders = [gl.VERTEX_SHADER, gl.FRAGMENT_SHADER];
-    const precisions = [
-        gl.LOW_FLOAT,
-        gl.MEDIUM_FLOAT,
-        gl.HIGH_FLOAT,
-        gl.LOW_INT,
-        gl.MEDIUM_INT,
-        gl.HIGH_INT
-    ];
-
-    for (const shader of shaders) {
-        for (const precision of precisions) {
-            try {
-                const p = gl.getShaderPrecisionFormat(shader, precision);
-                log(
-                    (shader === gl.VERTEX_SHADER ? "VERTEX" : "FRAGMENT") +
-                    " precision " + precision +
-                    " rangeMin=" + p.rangeMin +
-                    " rangeMax=" + p.rangeMax +
-                    " precision=" + p.precision
-                );
-            } catch(e){}
-        }
-    }
-
-    log("\n---- Extensions ----");
-
-    const exts = gl.getSupportedExtensions();
-
-    if (exts) {
-        exts.forEach(e => log(e));
-    }
-
-    const debug = gl.getExtension("WEBGL_debug_renderer_info");
-
-    if (debug) {
-        log("\n---- Unmasked GPU ----");
-        log("UNMASKED_VENDOR_WEBGL: " + gl.getParameter(debug.UNMASKED_VENDOR_WEBGL));
-        log("UNMASKED_RENDERER_WEBGL: " + gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
+    for(const key in info){
+        log(key + " : " + info[key]);
     }
 
 }
 
-async function getWebGPUInfo() {
-
-    log("\n========== WebGPU ==========");
-
-    if (!navigator.gpu) {
-        log("WebGPU not supported");
-        return;
-    }
-
-    const adapter = await navigator.gpu.requestAdapter();
-
-    if (!adapter) {
-        log("No adapter found");
-        return;
-    }
-
-    log("\n---- Adapter Info ----");
-
-    if (adapter.info) {
-        dumpObject("Adapter Info", adapter.info);
-    }
-
-    log("\n---- Features ----");
-
-    for (const f of adapter.features) {
-        log(f);
-    }
-
-    log("\n---- Limits ----");
-
-    for (const k in adapter.limits) {
-        log(k + ": " + adapter.limits[k]);
-    }
-
-}
-
-async function run() {
-
-    getWebGLInfo("webgl");
-    getWebGLInfo("webgl2");
-
-    await getWebGPUInfo();
-
-}
-
-run();
+getScreenInfo();
 
 </script>
+
 </body>
 </html>
