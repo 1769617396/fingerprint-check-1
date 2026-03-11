@@ -2,321 +2,156 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>GPU Fingerprint Debug</title>
-
+<title>WebGL / WebGPU Info</title>
 <style>
-body{
-    font-family: monospace;
-    background:#111;
-    color:#eee;
-    padding:20px;
-}
-.pass{color:#00ff88}
-.fail{color:#ff4d4d}
-.warn{color:#ffaa00}
-.section{
-    margin-top:30px;
-    padding:10px;
-    border:1px solid #444;
-}
+body { font-family: monospace; background:#111; color:#0f0; }
+pre { white-space: pre-wrap; }
 </style>
-
 </head>
-
 <body>
 
-<h1>WebGL / Canvas / WebGPU Fingerprint Debug</h1>
-
-<div id="summary"></div>
-<div id="output"></div>
+<h2>WebGL / WebGPU Device Info</h2>
+<pre id="output"></pre>
 
 <script>
 
-function print(title,data){
-
-    const div=document.createElement("div")
-    div.className="section"
-
-    const h=document.createElement("h3")
-    h.textContent=title
-
-    const pre=document.createElement("pre")
-    pre.textContent=JSON.stringify(data,null,2)
-
-    div.appendChild(h)
-    div.appendChild(pre)
-
-    document.getElementById("output").appendChild(div)
+function log(text) {
+    console.log(text);
+    document.getElementById("output").textContent += text + "\n";
 }
 
-function check(name,cond){
-
-    const line=document.createElement("div")
-
-    if(cond){
-        line.innerHTML="✔ "+name
-        line.className="pass"
-    }else{
-        line.innerHTML="✖ "+name
-        line.className="fail"
-    }
-
-    document.getElementById("summary").appendChild(line)
-}
-
-
-const canvas=document.createElement("canvas")
-const gl=canvas.getContext("webgl")
-const gl2=canvas.getContext("webgl2")
-
-if(!gl){
-    alert("WebGL not supported")
-}
-
-const debug=gl.getExtension("WEBGL_debug_renderer_info")
-
-const vendor=debug?gl.getParameter(debug.UNMASKED_VENDOR_WEBGL):"unknown"
-const renderer=debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):"unknown"
-
-check("WEBGL_debug_renderer_info available",!!debug)
-
-check("Renderer exists",renderer!="unknown")
-
-check("Vendor exists",vendor!="unknown")
-
-
-
-/* ======================================
-WEBGL PARAMETERS
-====================================== */
-
-const params={}
-
-const paramList=[
-
-"MAX_TEXTURE_SIZE",
-"MAX_RENDERBUFFER_SIZE",
-"MAX_VERTEX_ATTRIBS",
-"MAX_TEXTURE_IMAGE_UNITS",
-"MAX_VERTEX_TEXTURE_IMAGE_UNITS",
-"MAX_COMBINED_TEXTURE_IMAGE_UNITS",
-"MAX_CUBE_MAP_TEXTURE_SIZE",
-"MAX_VIEWPORT_DIMS",
-"ALIASED_LINE_WIDTH_RANGE",
-"ALIASED_POINT_SIZE_RANGE",
-"MAX_VERTEX_UNIFORM_VECTORS",
-"MAX_FRAGMENT_UNIFORM_VECTORS",
-"MAX_VARYING_VECTORS"
-
-]
-
-paramList.forEach(p=>{
-    try{
-        params[p]=gl.getParameter(gl[p])
-    }catch(e){}
-})
-
-print("WebGL Parameters",params)
-
-
-
-/* ======================================
-EXTENSIONS
-====================================== */
-
-const extensions=gl.getSupportedExtensions()||[]
-
-print("WebGL Extensions",extensions)
-
-check("Extensions >= 30",extensions.length>=30)
-
-
-
-/* ======================================
-SHADER PRECISION
-====================================== */
-
-function precision(shader,type){
-
-    const p=gl.getShaderPrecisionFormat(shader,type)
-
-    return{
-
-        rangeMin:p.rangeMin,
-        rangeMax:p.rangeMax,
-        precision:p.precision
+function dumpObject(title, obj) {
+    log("===== " + title + " =====");
+    for (const key in obj) {
+        try {
+            log(key + ": " + obj[key]);
+        } catch(e){}
     }
 }
 
-const shaderPrecision={
+function getWebGLInfo(type) {
 
-VERTEX_HIGH_FLOAT:precision(gl.VERTEX_SHADER,gl.HIGH_FLOAT),
-VERTEX_MEDIUM_FLOAT:precision(gl.VERTEX_SHADER,gl.MEDIUM_FLOAT),
-VERTEX_LOW_FLOAT:precision(gl.VERTEX_SHADER,gl.LOW_FLOAT),
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext(type);
 
-FRAGMENT_HIGH_FLOAT:precision(gl.FRAGMENT_SHADER,gl.HIGH_FLOAT),
-FRAGMENT_MEDIUM_FLOAT:precision(gl.FRAGMENT_SHADER,gl.MEDIUM_FLOAT),
-FRAGMENT_LOW_FLOAT:precision(gl.FRAGMENT_SHADER,gl.LOW_FLOAT)
+    if (!gl) {
+        log(type + " not supported\n");
+        return;
+    }
 
-}
+    log("\n========== " + type + " ==========");
 
-print("Shader Precision",shaderPrecision)
+    const params = Object.getOwnPropertyNames(Object.getPrototypeOf(gl));
 
+    const paramNames = [];
 
+    for (let key in gl) {
+        if (typeof gl[key] === "number") {
+            paramNames.push(key);
+        }
+    }
 
-/* ======================================
-CANVAS FINGERPRINT
-====================================== */
+    paramNames.sort();
 
-function canvasFingerprint(){
+    for (const name of paramNames) {
+        try {
+            const value = gl.getParameter(gl[name]);
+            log(name + ": " + JSON.stringify(value));
+        } catch(e){}
+    }
 
-    const c=document.createElement("canvas")
-    const ctx=c.getContext("2d")
+    log("\n---- Shader Precision ----");
 
-    ctx.textBaseline="top"
-    ctx.font="14px Arial"
-    ctx.fillStyle="#f60"
-    ctx.fillRect(125,1,62,20)
+    const shaders = [gl.VERTEX_SHADER, gl.FRAGMENT_SHADER];
+    const precisions = [
+        gl.LOW_FLOAT,
+        gl.MEDIUM_FLOAT,
+        gl.HIGH_FLOAT,
+        gl.LOW_INT,
+        gl.MEDIUM_INT,
+        gl.HIGH_INT
+    ];
 
-    ctx.fillStyle="#069"
-    ctx.fillText("fingerprint",2,15)
+    for (const shader of shaders) {
+        for (const precision of precisions) {
+            try {
+                const p = gl.getShaderPrecisionFormat(shader, precision);
+                log(
+                    (shader === gl.VERTEX_SHADER ? "VERTEX" : "FRAGMENT") +
+                    " precision " + precision +
+                    " rangeMin=" + p.rangeMin +
+                    " rangeMax=" + p.rangeMax +
+                    " precision=" + p.precision
+                );
+            } catch(e){}
+        }
+    }
 
-    return c.toDataURL()
-}
+    log("\n---- Extensions ----");
 
-const canvasFP=canvasFingerprint()
+    const exts = gl.getSupportedExtensions();
 
-print("Canvas Fingerprint",canvasFP)
+    if (exts) {
+        exts.forEach(e => log(e));
+    }
 
+    const debug = gl.getExtension("WEBGL_debug_renderer_info");
 
-
-/* ======================================
-WEBGPU
-====================================== */
-
-async function getWebGPU(){
-
-if(!navigator.gpu){
-
-print("WebGPU","not supported")
-return
-
-}
-
-const adapter=await navigator.gpu.requestAdapter()
-
-if(!adapter){
-
-print("WebGPU","adapter not found")
-return
-
-}
-
-const info={}
-
-try{
-
-const adapterInfo=await adapter.requestAdapterInfo()
-
-info.vendor=adapterInfo.vendor
-info.architecture=adapterInfo.architecture
-info.description=adapterInfo.description
-info.device=adapterInfo.device
-
-}catch(e){}
-
-print("WebGPU Adapter",info)
+    if (debug) {
+        log("\n---- Unmasked GPU ----");
+        log("UNMASKED_VENDOR_WEBGL: " + gl.getParameter(debug.UNMASKED_VENDOR_WEBGL));
+        log("UNMASKED_RENDERER_WEBGL: " + gl.getParameter(debug.UNMASKED_RENDERER_WEBGL));
+    }
 
 }
 
-getWebGPU()
+async function getWebGPUInfo() {
 
+    log("\n========== WebGPU ==========");
 
+    if (!navigator.gpu) {
+        log("WebGPU not supported");
+        return;
+    }
 
-/* ======================================
-GPU TIMING TEST
-====================================== */
+    const adapter = await navigator.gpu.requestAdapter();
 
-function gpuBenchmark(){
+    if (!adapter) {
+        log("No adapter found");
+        return;
+    }
 
-const t0=performance.now()
+    log("\n---- Adapter Info ----");
 
-for(let i=0;i<5000;i++){
+    if (adapter.info) {
+        dumpObject("Adapter Info", adapter.info);
+    }
 
-gl.clear(gl.COLOR_BUFFER_BIT)
+    log("\n---- Features ----");
 
-}
+    for (const f of adapter.features) {
+        log(f);
+    }
 
-const t1=performance.now()
+    log("\n---- Limits ----");
 
-return (t1-t0)
-
-}
-
-const gpuTime=gpuBenchmark()
-
-print("GPU Timing Benchmark (ms)",gpuTime)
-
-
-
-/* ======================================
-INTEL PROFILE CHECK
-====================================== */
-
-function intelCheck(){
-
-let ok=true
-
-if(!renderer.toLowerCase().includes("intel")) ok=false
-
-if(params.MAX_TEXTURE_SIZE<16384) ok=false
-
-if(extensions.length<40) ok=false
-
-return ok
+    for (const k in adapter.limits) {
+        log(k + ": " + adapter.limits[k]);
+    }
 
 }
 
-check("Intel Profile Consistency",intelCheck())
+async function run() {
 
+    getWebGLInfo("webgl");
+    getWebGLInfo("webgl2");
 
-
-/* ======================================
-FINAL RESULT
-====================================== */
-
-function finalCheck(){
-
-let issues=[]
-
-if(!debug) issues.push("debug_renderer_info missing")
-
-if(extensions.length<30) issues.push("extensions too few")
-
-if(!renderer) issues.push("renderer empty")
-
-if(issues.length===0){
-
-document.getElementById("summary").innerHTML+=
-"<h2 class='pass'>PASS — No obvious spoof detected</h2>"
-
-}else{
-
-document.getElementById("summary").innerHTML+=
-"<h2 class='fail'>FAIL — Possible fingerprint spoof</h2>"
+    await getWebGPUInfo();
 
 }
 
-}
-
-finalCheck()
-
-
-
-print("Renderer",renderer)
-print("Vendor",vendor)
+run();
 
 </script>
-
 </body>
 </html>
