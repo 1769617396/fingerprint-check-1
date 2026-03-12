@@ -2,62 +2,314 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Screen Info Test</title>
+<title>Fingerprint Debug</title>
+
 <style>
 body{
-    font-family: monospace;
-    background:#111;
-    color:#0f0;
-    padding:20px;
+font-family:monospace;
+background:#111;
+color:#00ff90;
+padding:20px;
 }
 pre{
-    font-size:14px;
+white-space:pre-wrap;
 }
 </style>
+
 </head>
 
 <body>
 
-<h2>Screen Information</h2>
-<pre id="output"></pre>
+<h2>Browser Fingerprint Debug</h2>
+<pre id="out"></pre>
 
 <script>
 
-function getScreenInfo(){
-
-    const screenInfo = `
-===== Screen Info =====
-screen.width : ${screen.width}
-screen.height : ${screen.height}
-screen.availWidth : ${screen.availWidth}
-screen.availHeight : ${screen.availHeight}
-screen.colorDepth : ${screen.colorDepth}
-screen.pixelDepth : ${screen.pixelDepth}
-screen.orientation : ${screen.orientation ? screen.orientation.type : "N/A"}
-
-screen.isExtended : ${screen.isExtended ?? "N/A"}
-
-===== Window Metrics =====
-window.devicePixelRatio : ${window.devicePixelRatio}
-
-window.innerWidth : ${window.innerWidth}
-window.innerHeight : ${window.innerHeight}
-
-window.outerWidth : ${window.outerWidth}
-window.outerHeight : ${window.outerHeight}
-
-===== Window Position =====
-window.screenX : ${window.screenX}
-window.screenY : ${window.screenY}
-
-window.screenLeft : ${window.screenLeft}
-window.screenTop : ${window.screenTop}
-`;
-
-    document.getElementById("output").textContent = screenInfo;
+function log(v){
+document.getElementById("out").textContent += v + "\n";
 }
 
-getScreenInfo();
+function section(v){
+log("\n===== " + v + " =====");
+}
+
+/* ---------------- SCREEN ---------------- */
+
+function screenInfo(){
+
+section("Screen Info");
+
+log("screen.width : " + screen.width);
+log("screen.height : " + screen.height);
+log("screen.availWidth : " + screen.availWidth);
+log("screen.availHeight : " + screen.availHeight);
+log("screen.colorDepth : " + screen.colorDepth);
+log("screen.pixelDepth : " + screen.pixelDepth);
+log("screen.isExtended : " + (screen.isExtended ?? "N/A"));
+
+section("Window Metrics");
+
+log("devicePixelRatio : " + devicePixelRatio);
+log("innerWidth : " + innerWidth);
+log("innerHeight : " + innerHeight);
+log("outerWidth : " + outerWidth);
+log("outerHeight : " + outerHeight);
+
+section("Window Position");
+
+log("screenX : " + screenX);
+log("screenY : " + screenY);
+log("screenLeft : " + screenLeft);
+log("screenTop : " + screenTop);
+
+}
+
+/* ---------------- NAVIGATOR ---------------- */
+
+async function navigatorInfo(){
+
+section("Navigator");
+
+log("userAgent : " + navigator.userAgent);
+log("platform : " + navigator.platform);
+
+log("language : " + navigator.language);
+log("languages : " + JSON.stringify(navigator.languages));
+
+log("hardwareConcurrency : " + navigator.hardwareConcurrency);
+log("deviceMemory : " + navigator.deviceMemory);
+
+log("maxTouchPoints : " + navigator.maxTouchPoints);
+
+log("plugins.length : " + navigator.plugins.length);
+log("plugins empty : " + (navigator.plugins.length === 0));
+
+try{
+
+const p = await navigator.permissions.query({name:"notifications"});
+log("notifications permission : " + p.state);
+
+}catch(e){
+
+log("notifications permission : unsupported");
+
+}
+
+}
+
+/* ---------------- WEBGL ---------------- */
+
+function webglInfo(){
+
+section("WebGL / GPU");
+
+const canvas=document.createElement("canvas");
+
+const gl=
+canvas.getContext("webgl")||
+canvas.getContext("experimental-webgl");
+
+if(!gl){
+
+log("WebGL not supported");
+return;
+
+}
+
+log("gl.VENDOR : "+gl.getParameter(gl.VENDOR));
+log("gl.RENDERER : "+gl.getParameter(gl.RENDERER));
+
+const ext=gl.getExtension("WEBGL_debug_renderer_info");
+
+if(ext){
+
+log("UNMASKED_VENDOR_WEBGL : "+
+gl.getParameter(ext.UNMASKED_VENDOR_WEBGL));
+
+log("UNMASKED_RENDERER_WEBGL : "+
+gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+
+}else{
+
+log("WEBGL_debug_renderer_info unavailable");
+
+}
+
+}
+
+/* ---------------- CANVAS ---------------- */
+
+async function canvasInfo(){
+
+section("Canvas");
+
+const canvas=document.createElement("canvas");
+const ctx=canvas.getContext("2d");
+
+ctx.textBaseline="top";
+ctx.font="16px Arial";
+ctx.fillStyle="#f60";
+ctx.fillRect(50,20,100,30);
+
+ctx.fillStyle="#069";
+ctx.fillText("fingerprint-test",10,40);
+
+const data=canvas.toDataURL();
+
+const hash=await sha256(data);
+
+log("canvas hash : "+hash);
+
+/* 简单检测是否有随机噪声 */
+
+const hashes=[];
+
+for(let i=0;i<3;i++){
+
+const data2=canvas.toDataURL();
+hashes.push(await sha256(data2));
+
+}
+
+const unique=new Set(hashes);
+
+if(unique.size>1){
+
+log("canvas noise detected : TRUE");
+
+}else{
+
+log("canvas noise detected : FALSE");
+
+}
+
+log("EnableCanvasContextNoise : unknown (browser internal)");
+
+}
+
+/* ---------------- AUDIO ---------------- */
+
+async function audioInfo(){
+
+section("Audio");
+
+try{
+
+const ctx=new OfflineAudioContext(1,44100,44100);
+
+const osc=ctx.createOscillator();
+const comp=ctx.createDynamicsCompressor();
+
+osc.connect(comp);
+comp.connect(ctx.destination);
+
+osc.start(0);
+
+const buffer=await ctx.startRendering();
+
+let sum=0;
+
+const data=buffer.getChannelData(0);
+
+for(let i=0;i<data.length;i++){
+
+sum+=Math.abs(data[i]);
+
+}
+
+const hash=await sha256(sum.toString());
+
+log("audio hash : "+hash);
+
+}catch(e){
+
+log("audio hash error");
+
+}
+
+log("EnableAudioBufferNoise : unknown (browser internal)");
+
+}
+
+/* ---------------- FONTS ---------------- */
+
+function fontInfo(){
+
+section("Fonts");
+
+const fonts=[
+
+"Roboto",
+"Segoe UI",
+"Arial",
+"Helvetica",
+"Times New Roman",
+"Courier New",
+"Noto Sans",
+"SamsungOne",
+"MiSans"
+
+];
+
+fonts.forEach(f=>{
+
+const ok=document.fonts.check('12px "'+f+'"');
+
+log(f+" : "+ok);
+
+});
+
+/* 安卓 / Windows 特征 */
+
+const roboto=document.fonts.check('12px "Roboto"');
+const segoe=document.fonts.check('12px "Segoe UI"');
+
+log("");
+
+log("Android font profile : "+roboto);
+log("Windows font profile : "+segoe);
+
+if(roboto && segoe){
+
+log("⚠ suspicious font combination (Android + Windows)");
+
+}
+
+}
+
+/* ---------------- HASH ---------------- */
+
+async function sha256(str){
+
+const buf=new TextEncoder().encode(str);
+
+const digest=await crypto.subtle.digest("SHA-256",buf);
+
+return [...new Uint8Array(digest)]
+.map(x=>x.toString(16).padStart(2,"0"))
+.join("");
+
+}
+
+/* ---------------- RUN ---------------- */
+
+async function run(){
+
+screenInfo();
+
+await navigatorInfo();
+
+webglInfo();
+
+await canvasInfo();
+
+await audioInfo();
+
+fontInfo();
+
+}
+
+run();
 
 </script>
 
