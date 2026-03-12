@@ -2,15 +2,20 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Screen Info</title>
+<title>Screen Info Test</title>
 <style>
 body{
     font-family: monospace;
     background:#111;
     color:#0f0;
+    padding:20px;
+}
+pre{
+    font-size:14px;
 }
 </style>
 </head>
+
 <body>
 
 <h2>Screen Information</h2>
@@ -18,38 +23,38 @@ body{
 
 <script>
 
-function log(text){
-    console.log(text);
-    document.getElementById("output").textContent += text + "\n";
-}
-
 function getScreenInfo(){
 
-    const info = {
-        "screen.width": screen.width,
-        "screen.height": screen.height,
+    const screenInfo = `
+===== Screen Info =====
+screen.width : ${screen.width}
+screen.height : ${screen.height}
+screen.availWidth : ${screen.availWidth}
+screen.availHeight : ${screen.availHeight}
+screen.colorDepth : ${screen.colorDepth}
+screen.pixelDepth : ${screen.pixelDepth}
+screen.orientation : ${screen.orientation ? screen.orientation.type : "N/A"}
 
-        "screen.availWidth": screen.availWidth,
-        "screen.availHeight": screen.availHeight,
+screen.isExtended : ${screen.isExtended ?? "N/A"}
 
-        "screen.colorDepth": screen.colorDepth,
-        "screen.pixelDepth": screen.pixelDepth,
+===== Window Metrics =====
+window.devicePixelRatio : ${window.devicePixelRatio}
 
-        "window.devicePixelRatio": window.devicePixelRatio,
+window.innerWidth : ${window.innerWidth}
+window.innerHeight : ${window.innerHeight}
 
-        "window.innerWidth": window.innerWidth,
-        "window.innerHeight": window.innerHeight,
+window.outerWidth : ${window.outerWidth}
+window.outerHeight : ${window.outerHeight}
 
-        "window.outerWidth": window.outerWidth,
-        "window.outerHeight": window.outerHeight
-    };
+===== Window Position =====
+window.screenX : ${window.screenX}
+window.screenY : ${window.screenY}
 
-    log("===== Screen Info =====");
+window.screenLeft : ${window.screenLeft}
+window.screenTop : ${window.screenTop}
+`;
 
-    for(const key in info){
-        log(key + " : " + info[key]);
-    }
-
+    document.getElementById("output").textContent = screenInfo;
 }
 
 getScreenInfo();
